@@ -24,7 +24,7 @@
                 </div>
                 <div>
                     <h1 class="font-bold text-xl leading-tight">Súper Lista</h1>
-                    <p class="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Local • Sin Conexión</p>
+                    <p class="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Compartida • En la Nube</p>
                 </div>
             </div>
             <div class="flex gap-2">
@@ -47,7 +47,10 @@
         <!-- Lista de Items -->
         <div class="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden mb-8">
             <div id="items-list" class="divide-y divide-slate-50">
-                <!-- Los items se cargarán aquí -->
+                <div class="p-12 text-center text-slate-400">
+                    <div class="animate-spin inline-block w-6 h-6 border-2 border-green-600 border-t-transparent rounded-full mb-2"></div>
+                    <p>Sincronizando...</p>
+                </div>
             </div>
         </div>
 
@@ -78,7 +81,7 @@
                 <i data-lucide="x"></i>
             </button>
             <h2 class="text-2xl font-black mb-2">Pégalo en el Refri</h2>
-            <p class="text-slate-500 text-sm mb-8 leading-relaxed">Escanea este código para acceder rápidamente a la lista de tu dispositivo.</p>
+            <p class="text-slate-500 text-sm mb-8 leading-relaxed">Escanea este código para acceder a la lista compartida de la casa.</p>
             <div class="bg-slate-50 p-6 rounded-3xl mb-8 border border-slate-100 shadow-inner">
                 <img id="qr-image" src="" alt="QR Code" class="mx-auto w-full aspect-square mix-blend-multiply">
             </div>
@@ -88,28 +91,83 @@
         </div>
     </div>
 
-    <!-- Scripts de la Aplicación -->
-    <script>
-        // Inicializar Iconos
+    <!-- Scripts con Firebase para Nube + FormSubmit -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // =====================================================================
+        // CONFIGURACIÓN DINÁMICA DE FIREBASE (Para sincronizar entre personas)
+        // =====================================================================
+        const isCanvas = typeof __firebase_config !== 'undefined';
+        const firebaseConfig = isCanvas 
+            ? JSON.parse(__firebase_config) 
+            : {
+                apiKey: "TU_API_KEY",
+                authDomain: "TU_PROYECTO.firebaseapp.com",
+                projectId: "TU_PROYECTO",
+                storageBucket: "TU_PROYECTO.appspot.com",
+                messagingSenderId: "TU_ID",
+                appId: "TU_APP_ID"
+            };
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'lista-compartida-formsubmit';
+        // =====================================================================
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let shoppingItems = [];
+        let unsubscribeList = null;
+
         lucide.createIcons();
 
-        // Obtener datos locales
-        let shoppingItems = JSON.parse(localStorage.getItem('myShoppingList')) || [];
+        // Referencia a la colección en la base de datos
+        const listRef = collection(db, 'artifacts', appId, 'public', 'data', 'shopping_list');
 
-        // Función para guardar en el almacenamiento local
-        function saveToLocal() {
-            localStorage.setItem('myShoppingList', JSON.stringify(shoppingItems));
+        const initAuth = async () => {
+            try {
+                if (!isCanvas && firebaseConfig.apiKey === "TU_API_KEY") {
+                    throw new Error("unconfigured");
+                }
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Auth error:", error);
+                document.getElementById('items-list').innerHTML = `<div class="p-8 text-center text-red-500 bg-red-50 rounded-2xl border border-red-100 text-sm font-medium">Error al conectar con la base de datos. Verifica tu configuración.</div>`;
+            }
+        };
+
+        // Escuchar autenticación
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                startListListener();
+            }
+        });
+
+        // Escuchar cambios en la lista de todos los usuarios
+        function startListListener() {
+            if (unsubscribeList) unsubscribeList();
+
+            unsubscribeList = onSnapshot(listRef, (snapshot) => {
+                shoppingItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                shoppingItems.sort((a, b) => b.createdAt - a.createdAt);
+                renderItems();
+            }, (err) => {
+                console.error("Error Firestore:", err);
+            });
         }
 
-        // Renderizar Lista
         function renderItems() {
             const listEl = document.getElementById('items-list');
             const actionsEl = document.getElementById('actions-container');
             
-            // Ordenar: lo más nuevo primero
-            const sortedItems = [...shoppingItems].sort((a, b) => b.createdAt - a.createdAt);
-            
-            if (sortedItems.length === 0) {
+            if (shoppingItems.length === 0) {
                 listEl.innerHTML = `
                     <div class="p-12 text-center animate-in fade-in duration-500">
                         <div class="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
@@ -119,7 +177,7 @@
                     </div>`;
                 actionsEl.classList.add('hidden');
             } else {
-                listEl.innerHTML = sortedItems.map(item => `
+                listEl.innerHTML = shoppingItems.map(item => `
                     <div class="flex items-center justify-between p-5 group hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
                         <span class="text-slate-700 font-medium">${item.name}</span>
                         <button onclick="window.removeItem('${item.id}')" class="text-slate-200 hover:text-red-500 p-2 transition-colors">
@@ -133,31 +191,38 @@
             lucide.createIcons();
         }
 
-        // Agregar Item
-        document.getElementById('add-form').onsubmit = (e) => {
+        // Agregar Item a la nube
+        document.getElementById('add-form').onsubmit = async (e) => {
             e.preventDefault();
+            if (!auth.currentUser) return;
+            
             const input = document.getElementById('item-input');
             const name = input.value.trim();
             if (!name) return;
 
-            const newItem = {
-                id: Date.now().toString(),
-                name: name,
-                createdAt: Date.now()
-            };
-
-            shoppingItems.push(newItem);
-            saveToLocal();
-            renderItems();
-            
-            input.value = '';
+            try {
+                await addDoc(listRef, { name, createdAt: Date.now() });
+                input.value = '';
+            } catch (err) { console.error(err); }
         };
 
-        // Eliminar Item
-        window.removeItem = (id) => {
-            shoppingItems = shoppingItems.filter(item => item.id !== id);
-            saveToLocal();
-            renderItems();
+        // Eliminar un Item específico de la nube
+        window.removeItem = async (id) => {
+            if (!auth.currentUser) return;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shopping_list', id));
+            } catch (err) { console.error(err); }
+        };
+
+        // Vaciar Todo permanentemente en la nube
+        window.clearAllItems = async () => {
+            if (!auth.currentUser || !confirm("¿Seguro que quieres vaciar toda la lista? Esto la borrará para todos.")) return;
+            try {
+                const snapshot = await getDocs(listRef);
+                const batch = writeBatch(db);
+                snapshot.docs.forEach(d => batch.delete(d.ref));
+                await batch.commit();
+            } catch (err) { console.error(err); }
         };
 
         // Sistema de Notificaciones (Toast)
@@ -168,7 +233,6 @@
             setTimeout(() => toast.classList.add('opacity-0', 'translate-y-4'), 3000);
         };
 
-        // Copiar Lista
         window.copyList = () => {
             const listStr = shoppingItems.map((it, i) => `${i + 1}. ${it.name}`).join('\n');
             const fullText = `Lista de compras:\n\n${listStr}`;
@@ -186,15 +250,7 @@
             document.body.removeChild(textArea);
         };
 
-        // Vaciar Todo
-        window.clearAllItems = () => {
-            if (!confirm("¿Vaciar toda la lista?")) return;
-            shoppingItems = [];
-            saveToLocal();
-            renderItems();
-        };
-
-        // Enviar por Email usando FormSubmit (AJAX en segundo plano)
+        // Enviar por Email usando FormSubmit
         window.sendListByEmail = async () => {
             if (shoppingItems.length === 0) return;
 
@@ -202,7 +258,6 @@
             const targetEmail = 'contacto@widdex.com';
             const btn = document.getElementById('btn-send-email');
             
-            // Animación de carga en el botón
             const originalHTML = btn.innerHTML;
             btn.innerHTML = `<div class="animate-spin inline-block w-5 h-5 border-2 border-white border-t-transparent rounded-full mb-1"></div> Enviando...`;
             btn.disabled = true;
@@ -217,7 +272,7 @@
                     body: JSON.stringify({
                         _subject: "Lista de Compras del Refri",
                         Lista_de_Productos: listStr,
-                        _template: "table" // Formato visual de tabla que provee FormSubmit
+                        _template: "table"
                     })
                 });
 
@@ -230,10 +285,9 @@
                 console.error("Error al enviar:", error);
                 window.showToast("Hubo un error de conexión al enviar.");
             } finally {
-                // Restaurar estado del botón
                 btn.innerHTML = originalHTML;
                 btn.disabled = false;
-                lucide.createIcons(); // Recargar el icono
+                lucide.createIcons();
             }
         };
         
@@ -249,8 +303,7 @@
             }
         };
 
-        // Renderizado Inicial
-        renderItems();
+        initAuth();
     </script>
 </body>
 </html>
