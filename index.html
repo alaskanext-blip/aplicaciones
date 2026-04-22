@@ -152,9 +152,12 @@
                 const cacheBuster = "?_=" + Date.now();
                 const response = await fetch(GET_URL + cacheBuster, { cache: "no-store" });
                 
-                if (!response.ok) throw new Error("Fallo de red");
+                // NOTA: Dweet.io devuelve 404 cuando la sala es nueva. NO lanzamos error aquí.
+                if (!response.ok && response.status !== 404) throw new Error("Fallo de red real");
+                
                 const data = await response.json();
                 
+                // Si la sala ya existe y tiene contenido
                 if (data.this === "succeeded" && data.with && data.with.length > 0) {
                     const cloudContent = data.with[0].content;
                     const cloudTimestamp = parseInt(cloudContent.ts || 0);
@@ -174,17 +177,23 @@
                         localStorage.setItem(`ts_${listId}`, cloudTimestamp);
                         renderItems();
                     } 
-                    // Si nosotros tenemos datos más nuevos, los subimos a la nube
+                    // Si nosotros tenemos datos más nuevos, los subimos a la nube (Resolución de conflicto)
                     else if (localTimestamp > cloudTimestamp) {
                         pushToCloud();
                     }
-                } else {
-                    // Si la nube está vacía, subimos lo nuestro
+                    updateStatus(true);
+                } 
+                // Si la sala es NUEVA (Error 404)
+                else if (data.with === 404 || data.because === "we couldn't find this") {
                     shoppingItems = JSON.parse(localStorage.getItem(`list_${listId}`)) || [];
-                    if (shoppingItems.length > 0) pushToCloud();
+                    if (shoppingItems.length > 0) {
+                        pushToCloud(); // Empujamos nuestros datos locales para inicializar la nube
+                    }
                     renderItems();
+                    updateStatus(true);
+                } else {
+                    throw new Error("Formato de respuesta desconocido");
                 }
-                updateStatus(true);
             } catch (error) {
                 console.warn("Usando datos locales por falla de internet.");
                 if(shoppingItems.length === 0) {
@@ -201,22 +210,23 @@
             const timestamp = Date.now();
             const payloadStr = JSON.stringify(shoppingItems);
             
+            // Guardado local inmediato
             localStorage.setItem(`list_${listId}`, payloadStr);
             localStorage.setItem(`ts_${listId}`, timestamp);
             
             try {
-                // Intento 1: POST seguro (Más rápido y confiable)
+                // Envío en formato JSON puro (el más compatible con Dweet)
                 await fetch(DWEET_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ payload: payloadStr, ts: timestamp })
                 });
             } catch (error) {
-                // Intento 2: GET Fallback (Burlar restricciones de navegadores estrictos)
+                // Fallback por si el POST estricto falla en ciertos navegadores
                 try {
                     await fetch(`${DWEET_URL}?payload=${encodeURIComponent(payloadStr)}&ts=${timestamp}`);
                 } catch(e) {
-                    console.warn("Fallo subida a nube.");
+                    console.warn("Fallo subida a nube en segundo plano.");
                 }
             }
         }
