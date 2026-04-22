@@ -3,45 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Súper Lista del Refri</title>
-    <!-- Tailwind CSS -->
+    <title>Lista del Refri</title>
+    <!-- Tailwind CSS para diseño -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Iconos -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        /* Animaciones suaves */
         .fade-in { animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        /* Ocultar scrollbar pero permitir scroll */
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
 
-    <!-- Contenedor Principal -->
-    <main class="flex-1 w-full max-w-md mx-auto bg-white min-h-screen shadow-2xl relative pb-24">
+    <main class="flex-1 w-full max-w-md mx-auto bg-white min-h-screen shadow-xl relative pb-24 border-x border-slate-100">
         
         <!-- Encabezado -->
-        <header class="bg-green-600 text-white p-6 rounded-b-[2rem] shadow-md sticky top-0 z-10">
+        <header class="bg-slate-900 text-white p-6 rounded-b-[2rem] shadow-lg sticky top-0 z-10">
             <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-2xl font-black tracking-tight">Mi Refri</h1>
-                    <p class="text-green-200 text-xs font-medium uppercase tracking-widest mt-1 flex items-center gap-1">
-                        <span class="w-2 h-2 rounded-full bg-green-300 animate-pulse"></span> Lista Compartida
+                    <h1 class="text-2xl font-black tracking-tight">Despensa</h1>
+                    <p id="room-badge" class="text-green-400 text-xs font-bold uppercase tracking-widest mt-1 flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span> Sincronizada
                     </p>
                 </div>
-                <button onclick="toggleQR(true)" class="bg-white/20 hover:bg-white/30 p-3 rounded-2xl backdrop-blur-sm transition-all active:scale-95">
+                <button onclick="toggleQR(true)" class="bg-white/10 hover:bg-white/20 p-3 rounded-2xl transition-all active:scale-95">
                     <i data-lucide="qr-code" class="w-6 h-6"></i>
                 </button>
             </div>
 
-            <!-- Formulario Integrado en el Header -->
+            <!-- Formulario de Ingreso -->
             <form id="add-form" class="mt-6 flex gap-2 relative">
                 <input type="text" id="item-input" required autocomplete="off"
-                    placeholder="Ej. Leche, Huevos, Pan..." 
-                    class="flex-1 px-5 py-4 rounded-2xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-green-300/50 shadow-inner transition-all">
-                <button type="submit" id="btn-add" class="bg-slate-900 text-white p-4 rounded-2xl hover:bg-black active:scale-95 transition-all shadow-lg flex items-center justify-center min-w-[60px]">
+                    placeholder="¿Qué falta comprar?" 
+                    class="flex-1 px-5 py-4 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/50 shadow-inner transition-all">
+                <button type="submit" id="btn-add" class="bg-blue-600 text-white p-4 rounded-2xl hover:bg-blue-500 active:scale-95 transition-all shadow-lg flex items-center justify-center min-w-[60px]">
                     <i data-lucide="plus" class="w-6 h-6"></i>
                 </button>
             </form>
@@ -50,26 +45,24 @@
         <!-- Lista de Productos -->
         <div class="p-6">
             <div id="items-list" class="space-y-3">
-                <!-- Estado de Carga Inicial -->
-                <div class="flex flex-col items-center justify-center py-12 text-slate-400">
-                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mb-4"></div>
-                    <p class="font-medium">Conectando a la despensa...</p>
+                <div class="flex flex-col items-center justify-center py-16 text-slate-400">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+                    <p class="font-medium text-sm">Conectando dispositivos...</p>
                 </div>
             </div>
         </div>
 
-        <!-- Barra de Acciones Inferior (Fija) -->
-        <div id="action-bar" class="fixed bottom-0 left-0 right-0 w-full max-w-md mx-auto bg-white/80 backdrop-blur-md border-t border-slate-100 p-4 pb-safe hidden">
+        <!-- Barra de Acciones Inferior -->
+        <div id="action-bar" class="fixed bottom-0 left-0 right-0 w-full max-w-md mx-auto bg-white/90 backdrop-blur-md border-t border-slate-100 p-4 pb-safe hidden">
             <div class="flex gap-3">
-                <button onclick="clearAllItems()" class="flex-1 bg-red-50 text-red-600 hover:bg-red-100 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95">
+                <button onclick="clearAllItems()" class="flex-1 bg-slate-100 text-red-500 hover:bg-red-50 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95">
                     <i data-lucide="trash-2" class="w-5 h-5"></i> Vaciar
                 </button>
-                <button onclick="sendListByEmail()" id="btn-send" class="flex-[2] bg-green-600 text-white hover:bg-green-700 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-green-200 transition-all active:scale-95">
+                <button onclick="sendListByEmail()" id="btn-send" class="flex-[2] bg-slate-900 text-white hover:bg-black py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95">
                     <i data-lucide="send" class="w-5 h-5"></i> Enviar a Widdex
                 </button>
             </div>
         </div>
-
     </main>
 
     <!-- Modal QR -->
@@ -78,90 +71,126 @@
             <button onclick="toggleQR(false)" class="absolute top-5 right-5 text-slate-400 hover:text-slate-700 bg-slate-100 rounded-full p-2 transition-all">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
-            <div class="bg-green-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <i data-lucide="smartphone-nfc" class="w-8 h-8 text-green-600"></i>
+            <div class="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i data-lucide="users" class="w-8 h-8 text-blue-600"></i>
             </div>
-            <h2 class="text-2xl font-black mb-2 text-slate-800">Escanea y Añade</h2>
-            <p class="text-slate-500 text-sm mb-6">Pega esto en el refri. Todos podrán agregar productos desde su celular.</p>
-            <div class="bg-white p-4 rounded-3xl border-2 border-slate-100 shadow-inner mb-6">
-                <img id="qr-image" src="" alt="Código QR" class="w-full aspect-square mix-blend-multiply">
+            <h2 class="text-2xl font-black mb-2 text-slate-800">Código Familiar</h2>
+            <p class="text-slate-500 text-sm mb-6">Pega este QR en el refri. Quien lo escanee entrará a esta misma lista desde su celular.</p>
+            <div class="bg-white p-4 rounded-3xl border-2 border-slate-100 shadow-inner mb-2">
+                <img id="qr-image" src="" alt="Código QR" class="w-full aspect-square">
             </div>
         </div>
     </div>
 
     <!-- Notificaciones flotantes (Toast) -->
     <div id="toast" class="fixed top-6 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full shadow-2xl transition-all duration-300 opacity-0 -translate-y-4 pointer-events-none z-[60] flex items-center gap-2 font-medium text-sm">
-        <i data-lucide="check-circle-2" class="w-5 h-5 text-green-400"></i>
+        <i data-lucide="check-circle-2" class="w-5 h-5 text-blue-400" id="toast-icon"></i>
         <span id="toast-msg">Mensaje</span>
     </div>
 
-    <!-- ========================================== -->
-    <!-- LÓGICA DE LA APLICACIÓN (FIREBASE + JS)    -->
-    <!-- ========================================== -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-
-        // 1. CONFIGURACIÓN
-        // Si vas a subir esto a GitHub, pon tus llaves donde dice "TU_API_KEY", etc.
-        const isPreview = typeof __firebase_config !== 'undefined';
-        const firebaseConfig = isPreview ? JSON.parse(__firebase_config) : {
-            apiKey: "TU_API_KEY",
-            authDomain: "TU_PROYECTO.firebaseapp.com",
-            projectId: "TU_PROYECTO",
-            storageBucket: "TU_PROYECTO.appspot.com",
-            messagingSenderId: "TU_ID",
-            appId: "TU_APP_ID"
-        };
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'lista-widdex-definitiva';
-
-        // 2. INICIALIZACIÓN
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const listRef = collection(db, 'artifacts', appId, 'public', 'data', 'shopping_list');
-        
-        let shoppingItems = [];
-        let unsubscribeList = null;
+    <script>
         lucide.createIcons();
 
-        // 3. AUTENTICACIÓN SILENCIOSA (Requerido para bases de datos compartidas)
-        async function init() {
+        // 1. CONFIGURACIÓN DE LA "SALA" (ROOM) Y SINCRONIZACIÓN
+        let shoppingItems = [];
+        let listId = new URLSearchParams(window.location.search).get('id');
+
+        // Si es la primera vez que se abre, crear una sala secreta en la URL
+        if (!listId) {
+            // Respaldamos el listId en almacenamiento local para no perderlo en el iframe
+            listId = localStorage.getItem('current_room_id');
+            if (!listId) {
+                listId = 'refri-widdex-' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('current_room_id', listId);
+            }
+
             try {
-                if (!isPreview && firebaseConfig.apiKey === "TU_API_KEY") throw new Error("no-config");
-                
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
+                // Evitamos intentar modificar la URL en entornos de vista previa restringidos (blob: URL)
+                if (!window.location.href.startsWith('blob:')) {
+                    const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?id=' + listId;
+                    window.history.replaceState({path: newUrl}, '', newUrl);
                 }
             } catch (error) {
-                mostrarErrorConfiguracion();
+                console.warn("Vista previa detectada: No se puede modificar la barra de direcciones de forma segura.", error);
+            }
+        } else {
+            // Si la URL trajo el id, lo guardamos para usos futuros
+            localStorage.setItem('current_room_id', listId);
+        }
+
+        const DWEET_URL = `https://dweet.io/dweet/for/${listId}`;
+        const GET_URL = `https://dweet.io/get/latest/dweet/for/${listId}`;
+
+        // 2. SINCRONIZAR CON LA NUBE ANÓNIMA Y ALMACENAMIENTO LOCAL
+        async function syncWithCloud() {
+            try {
+                const response = await fetch(GET_URL);
+                const data = await response.json();
+                
+                // Leemos los datos de la nube
+                if (data.this === "succeeded" && data.with && data.with.length > 0) {
+                    const cloudContent = data.with[0].content;
+                    const cloudTimestamp = parseInt(cloudContent.ts || cloudContent.timestamp || 0);
+                    const localTimestamp = parseInt(localStorage.getItem(`ts_${listId}`) || 0);
+
+                    // Comparamos quién tiene la lista más reciente (La nube o este celular)
+                    if (cloudTimestamp >= localTimestamp) {
+                        let parsedItems = [];
+                        if (cloudContent.payload) {
+                            try {
+                                parsedItems = typeof cloudContent.payload === 'string' ? JSON.parse(cloudContent.payload) : cloudContent.payload;
+                            } catch(e) { parsedItems = []; }
+                        } else if (cloudContent.items) {
+                            parsedItems = typeof cloudContent.items === 'string' ? JSON.parse(cloudContent.items) : cloudContent.items;
+                        }
+                        
+                        shoppingItems = parsedItems || [];
+                        localStorage.setItem(`list_${listId}`, JSON.stringify(shoppingItems));
+                        localStorage.setItem(`ts_${listId}`, cloudTimestamp);
+                        renderItems();
+                    } else {
+                        // Si por algún motivo este celular está más actualizado, forzamos subir a la nube
+                        pushToCloud();
+                    }
+                } else {
+                    // Si la nube está vacía (sala nueva), leemos la memoria local y la subimos
+                    shoppingItems = JSON.parse(localStorage.getItem(`list_${listId}`)) || [];
+                    pushToCloud();
+                    renderItems();
+                }
+            } catch (error) {
+                // Si no hay internet, al menos mostramos lo guardado localmente
+                console.warn("Sincronización en pausa. Usando datos locales.");
+                shoppingItems = JSON.parse(localStorage.getItem(`list_${listId}`)) || [];
+                renderItems();
             }
         }
 
-        onAuthStateChanged(auth, (user) => {
-            if (user) escucharBaseDeDatos();
-        });
-
-        // 4. ESCUCHAR CAMBIOS EN TIEMPO REAL
-        function escucharBaseDeDatos() {
-            if (unsubscribeList) unsubscribeList();
-
-            unsubscribeList = onSnapshot(listRef, (snapshot) => {
-                // Mapear y ordenar los datos desde lo más nuevo a lo más viejo
-                shoppingItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                shoppingItems.sort((a, b) => b.createdAt - a.createdAt);
-                dibujarLista();
-            }, (error) => {
-                console.error("Error leyendo datos:", error);
-                mostrarErrorConfiguracion();
-            });
+        // Subir los datos actuales para que los demás celulares los vean
+        async function pushToCloud() {
+            const timestamp = Date.now();
+            localStorage.setItem(`list_${listId}`, JSON.stringify(shoppingItems));
+            localStorage.setItem(`ts_${listId}`, timestamp);
+            
+            try {
+                // Usamos GET en lugar de POST para evitar bloqueos CORS en entornos estrictos
+                const payloadStr = encodeURIComponent(JSON.stringify(shoppingItems));
+                const url = `https://dweet.io/dweet/for/${listId}?payload=${payloadStr}&ts=${timestamp}`;
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    console.warn("Aviso: Sincronización demorada.");
+                }
+            } catch (error) {
+                console.warn("No se pudo conectar a la nube. Reintentando en segundo plano...");
+            }
         }
 
-        // 5. INTERFAZ GRÁFICA
-        function dibujarLista() {
+        // Revisar actualizaciones de otros celulares cada 3 segundos
+        setInterval(syncWithCloud, 3000);
+
+        // 3. DIBUJAR LA LISTA EN PANTALLA
+        function renderItems() {
             const listEl = document.getElementById('items-list');
             const actionBar = document.getElementById('action-bar');
             
@@ -169,20 +198,20 @@
                 listEl.innerHTML = `
                     <div class="flex flex-col items-center justify-center py-16 text-slate-400 fade-in">
                         <div class="bg-slate-100 p-6 rounded-full mb-4">
-                            <i data-lucide="shopping-bag" class="w-12 h-12 text-slate-300"></i>
+                            <i data-lucide="check" class="w-12 h-12 text-slate-300"></i>
                         </div>
-                        <p class="font-bold text-lg text-slate-600">¡Todo listo!</p>
-                        <p class="text-sm">El refrigerador está abastecido.</p>
+                        <p class="font-bold text-lg text-slate-600">No hay pendientes</p>
+                        <p class="text-sm text-center px-4">Agrega productos o escanea el QR desde otro celular para participar.</p>
                     </div>`;
                 actionBar.classList.add('hidden');
             } else {
                 listEl.innerHTML = shoppingItems.map(item => `
-                    <div class="fade-in bg-white border border-slate-100 p-4 rounded-2xl shadow-sm flex items-center justify-between group hover:border-green-200 transition-colors">
+                    <div class="fade-in bg-white border border-slate-100 p-4 rounded-2xl shadow-sm flex items-center justify-between group hover:border-blue-200 transition-colors">
                         <div class="flex items-center gap-3 overflow-hidden">
-                            <div class="w-2 h-2 rounded-full bg-green-500 flex-shrink-0"></div>
+                            <div class="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></div>
                             <span class="font-medium text-slate-700 truncate">${item.name}</span>
                         </div>
-                        <button onclick="window.eliminarItem('${item.id}')" class="text-slate-300 hover:text-red-500 bg-slate-50 hover:bg-red-50 p-2 rounded-xl transition-all">
+                        <button onclick="eliminarItem('${item.id}')" class="text-slate-300 hover:text-red-500 bg-slate-50 hover:bg-red-50 p-2 rounded-xl transition-all">
                             <i data-lucide="x" class="w-4 h-4"></i>
                         </button>
                     </div>
@@ -192,56 +221,44 @@
             lucide.createIcons();
         }
 
-        function mostrarErrorConfiguracion() {
-            document.getElementById('items-list').innerHTML = `
-                <div class="bg-red-50 border border-red-200 text-red-600 p-6 rounded-2xl text-center text-sm">
-                    <i data-lucide="alert-triangle" class="w-8 h-8 mx-auto mb-2 text-red-500"></i>
-                    <b>Falta conexión.</b><br>Si estás en GitHub, edita el código y agrega tus llaves de Firebase.
-                </div>`;
-            lucide.createIcons();
-        }
-
-        // 6. ACCIONES DEL USUARIO
-        document.getElementById('add-form').onsubmit = async (e) => {
+        // 4. AÑADIR PRODUCTO
+        document.getElementById('add-form').onsubmit = (e) => {
             e.preventDefault();
-            if (!auth.currentUser) return;
-            
             const input = document.getElementById('item-input');
+            const btn = document.getElementById('btn-add');
             const name = input.value.trim();
             if (!name) return;
 
-            // Bloquear input mientras sube
-            input.disabled = true;
-            try {
-                await addDoc(listRef, { name, createdAt: Date.now() });
-                input.value = '';
-            } catch (err) { 
-                showToast("Error al añadir producto"); 
-            } finally {
-                input.disabled = false;
-                input.focus();
-            }
+            // Bloquear botón brevemente para evitar dobles clics
+            btn.innerHTML = `<div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>`;
+            btn.disabled = true;
+
+            shoppingItems.unshift({ id: Date.now().toString(), name: name });
+            renderItems(); // Refrescar vista
+            pushToCloud(); // Mandar al resto de celulares
+            
+            input.value = '';
+            btn.innerHTML = `<i data-lucide="plus" class="w-6 h-6"></i>`;
+            btn.disabled = false;
+            input.focus();
         };
 
-        window.eliminarItem = async (id) => {
-            if (!auth.currentUser) return;
-            try {
-                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shopping_list', id));
-            } catch (err) { console.error(err); }
+        // 5. ELIMINAR Y VACIAR
+        window.eliminarItem = (id) => {
+            shoppingItems = shoppingItems.filter(item => item.id !== id);
+            renderItems();
+            pushToCloud();
         };
 
-        window.clearAllItems = async () => {
-            if (!auth.currentUser || !confirm("¿Vaciar toda la lista permanentemente?")) return;
-            try {
-                const snapshot = await getDocs(listRef);
-                const batch = writeBatch(db);
-                snapshot.docs.forEach(d => batch.delete(d.ref));
-                await batch.commit();
-                showToast("Lista vaciada con éxito");
-            } catch (err) { console.error(err); }
+        window.clearAllItems = () => {
+            if (!confirm("¿Seguro que quieres vaciar toda la lista? Esto la borrará en todos los celulares conectados.")) return;
+            shoppingItems = [];
+            renderItems();
+            pushToCloud();
+            showToast("Lista vaciada", true);
         };
 
-        // 7. ENVÍO DE CORREO INVISIBLE (FormSubmit)
+        // 6. ENVIAR CORREO (FormSubmit)
         window.sendListByEmail = async () => {
             if (shoppingItems.length === 0) return;
 
@@ -264,12 +281,12 @@
                 });
 
                 if (response.ok) {
-                    showToast("¡Enviado a contacto@widdex.com!");
+                    showToast("¡Enviado a contacto@widdex.com!", true);
                 } else {
-                    throw new Error("Fallo FormSubmit");
+                    throw new Error("Fallo envío");
                 }
             } catch (error) {
-                showToast("Revisa tu conexión a internet.");
+                showToast("Error al enviar. Revisa tu internet.", false);
             } finally {
                 btn.innerHTML = originalHTML;
                 btn.disabled = false;
@@ -277,10 +294,14 @@
             }
         };
 
-        // 8. UTILIDADES (QR y Notificaciones)
-        window.showToast = (msg) => {
+        // 7. UTILIDADES (Toast y QR)
+        window.showToast = (msg, success = true) => {
             const toast = document.getElementById('toast');
             document.getElementById('toast-msg').innerText = msg;
+            document.getElementById('toast-icon').setAttribute('data-lucide', success ? 'check-circle-2' : 'alert-circle');
+            document.getElementById('toast-icon').className = `w-5 h-5 ${success ? 'text-blue-400' : 'text-red-400'}`;
+            lucide.createIcons();
+            
             toast.classList.remove('opacity-0', '-translate-y-4');
             toast.classList.add('translate-y-0');
             setTimeout(() => {
@@ -292,16 +313,26 @@
         window.toggleQR = (show) => {
             const modal = document.getElementById('qr-modal');
             if (show) {
-                const url = window.location.href.split('?')[0]; // URL limpia sin parámetros
-                document.getElementById('qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(url)}&color=0f172a&bgcolor=ffffff`;
+                // Generamos el QR incluyendo el ID secreto de la sala
+                let url = window.location.href.split('?')[0]; 
+                
+                // Si la app está en un entorno seguro (blob:), le agregamos un dominio falso 
+                // para que el QR pueda leerse o no se rompa la imagen,
+                // aunque para producción será la URL real de GitHub u otro hosting.
+                if (url.startsWith('blob:')) {
+                    url = "https://tu-sitio-en-github.com/index.html"; 
+                }
+
+                const shareUrl = `${url}?id=${listId}`;
+                document.getElementById('qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(shareUrl)}&color=0f172a&bgcolor=ffffff`;
                 modal.classList.remove('hidden');
             } else {
                 modal.classList.add('hidden');
             }
         };
 
-        // Iniciar
-        init();
+        // Iniciar la app obteniendo los datos
+        syncWithCloud();
     </script>
 </body>
 </html>
