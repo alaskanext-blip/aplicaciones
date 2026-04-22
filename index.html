@@ -71,13 +71,22 @@
 
         <!-- Botones de acción -->
         <div id="actions-container" class="hidden grid grid-cols-2 gap-4">
-            <button onclick="sendListByEmail()" class="flex items-center justify-center gap-2 bg-slate-900 hover:bg-black text-white py-4 rounded-2xl font-bold text-sm shadow-xl active:scale-95 transition-all">
-                <i data-lucide="mail" class="w-4 h-4"></i> Enviar Lista
+            <button onclick="sendListByEmail()" class="flex flex-col items-center justify-center gap-1 bg-slate-900 hover:bg-black text-white py-3 rounded-2xl font-bold text-sm shadow-xl active:scale-95 transition-all">
+                <i data-lucide="mail" class="w-5 h-5"></i> Abrir Correo
             </button>
-            <button onclick="clearAllItems()" class="flex items-center justify-center gap-2 bg-white text-red-600 border border-red-100 hover:bg-red-50 py-4 rounded-2xl font-bold text-sm active:scale-95 transition-all">
-                Vaciar Todo
+            <button onclick="copyList()" class="flex flex-col items-center justify-center gap-1 bg-blue-100 hover:bg-blue-200 text-blue-700 py-3 rounded-2xl font-bold text-sm shadow-sm active:scale-95 transition-all">
+                <i data-lucide="copy" class="w-5 h-5"></i> Copiar Lista
+            </button>
+            <button onclick="clearAllItems()" class="col-span-2 flex items-center justify-center gap-2 bg-white text-red-600 border border-red-100 hover:bg-red-50 py-3 rounded-2xl font-bold text-sm active:scale-95 transition-all">
+                <i data-lucide="trash-2" class="w-4 h-4"></i> Vaciar Todo
             </button>
         </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-5 py-3 rounded-xl shadow-2xl transition-all duration-300 opacity-0 translate-y-4 pointer-events-none z-50 flex items-center gap-3">
+        <i data-lucide="info" class="w-5 h-5 text-blue-400"></i>
+        <span id="toast-msg" class="text-sm font-medium"></span>
     </div>
 
     <!-- Modal QR -->
@@ -132,6 +141,10 @@
         // 2. Lógica de Autenticación (Regla 3: Auth ANTES de Firestore)
         const initAuth = async () => {
             try {
+                // Comprobación para evitar el error genérico si faltan las credenciales
+                if (firebaseConfig.apiKey === "TU_API_KEY") {
+                    throw new Error("unconfigured");
+                }
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
@@ -139,7 +152,11 @@
                 }
             } catch (error) {
                 console.error("Auth error:", error);
-                document.getElementById('items-list').innerHTML = '<div class="p-12 text-center text-red-500">Error al iniciar sesión</div>';
+                let msg = "Error al iniciar sesión.";
+                if (error.message === "unconfigured" || (error.code && error.code.includes("api-key"))) {
+                    msg = "¡Falta configurar Firebase! Debes editar el archivo y poner tu API_KEY y datos del proyecto.";
+                }
+                document.getElementById('items-list').innerHTML = `<div class="p-8 text-center text-red-500 bg-red-50 rounded-2xl border border-red-100 text-sm font-medium">${msg}</div>`;
             }
         };
 
@@ -221,6 +238,33 @@
             } catch (err) { console.error(err); }
         };
 
+        // Sistema de Notificaciones (Toast)
+        window.showToast = (msg) => {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            toast.classList.remove('opacity-0', 'translate-y-4');
+            setTimeout(() => toast.classList.add('opacity-0', 'translate-y-4'), 3000);
+        };
+
+        // Copiar Lista (Alternativa a Correo)
+        window.copyList = () => {
+            const listStr = shoppingItems.map((it, i) => `${i + 1}. ${it.name}`).join('\n');
+            const fullText = `Lista de compras:\n\n${listStr}`;
+            
+            // Usamos un método compatible con iframes para copiar al portapapeles
+            const textArea = document.createElement("textarea");
+            textArea.value = fullText;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                window.showToast("¡Lista copiada al portapapeles!");
+            } catch (err) {
+                window.showToast("Error al copiar la lista");
+            }
+            document.body.removeChild(textArea);
+        };
+
         // Vaciar Todo
         window.clearAllItems = async () => {
             if (!auth.currentUser || !confirm("¿Vaciar toda la lista?")) return;
@@ -242,7 +286,17 @@
             }
             const listStr = shoppingItems.map((it, i) => `${i + 1}. ${it.name}`).join('%0D%0A');
             const body = `Lista de compras:%0D%0A%0D%0A${listStr}`;
-            window.location.href = `mailto:${email}?subject=Lista del Supermercado&body=${body}`;
+            const mailtoUrl = `mailto:${email}?subject=Lista del Supermercado&body=${body}`;
+
+            window.showToast("Abriendo aplicación de correo...");
+
+            // Usamos target="_top" para forzar la apertura fuera del iframe
+            const tempLink = document.createElement('a');
+            tempLink.href = mailtoUrl;
+            tempLink.target = '_top';
+            document.body.appendChild(tempLink);
+            tempLink.click();
+            document.body.removeChild(tempLink);
         };
 
         // QR y Configuración UI
@@ -261,7 +315,8 @@
         };
 
         window.saveEmail = (val) => localStorage.setItem('savedEmail', val);
-        document.getElementById('target-email').value = localStorage.getItem('savedEmail') || '';
+        // Se define el correo por defecto
+        document.getElementById('target-email').value = localStorage.getItem('savedEmail') || 'contacto@widdex.com';
 
         // Iniciar flujo de Auth al cargar
         initAuth();
