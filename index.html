@@ -15,20 +15,20 @@
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
 
-    <main class="flex-1 w-full max-w-md mx-auto bg-white min-h-screen shadow-xl relative pb-24 border-x border-slate-100">
+    <main class="flex-1 w-full max-w-md mx-auto bg-white min-h-screen shadow-xl relative pb-32 border-x border-slate-100">
         
         <!-- Encabezado -->
         <header class="bg-slate-900 text-white p-6 rounded-b-[2rem] shadow-lg sticky top-0 z-10">
             <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-2xl font-black tracking-tight">Despensa</h1>
-                    <p class="text-xs font-bold uppercase tracking-widest mt-1 flex items-center gap-1">
+                    <h1 class="text-xl md:text-2xl font-black tracking-tight">Lista de Supermercados</h1>
+                    <p class="text-[10px] md:text-xs font-bold uppercase tracking-widest mt-1 flex items-center gap-1">
                         <span id="sync-dot" class="w-2 h-2 rounded-full bg-slate-500"></span> 
                         <span id="sync-text" class="text-slate-400">Conectando a la nube...</span>
                     </p>
                 </div>
-                <button onclick="toggleQR(true)" class="bg-white/10 hover:bg-white/20 p-3 rounded-2xl transition-all active:scale-95">
-                    <i data-lucide="qr-code" class="w-6 h-6"></i>
+                <button onclick="toggleQR(true)" class="bg-white/10 hover:bg-white/20 p-3 rounded-2xl transition-all active:scale-95 ml-2">
+                    <i data-lucide="qr-code" class="w-5 h-5 md:w-6 md:h-6"></i>
                 </button>
             </div>
 
@@ -55,12 +55,15 @@
 
         <!-- Barra de Acciones Inferior -->
         <div id="action-bar" class="fixed bottom-0 left-0 right-0 w-full max-w-md mx-auto bg-white/90 backdrop-blur-md border-t border-slate-100 p-4 pb-safe hidden">
-            <div class="flex gap-3">
-                <button onclick="clearAllItems()" class="flex-1 bg-slate-100 text-red-500 hover:bg-red-50 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95">
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="copyList()" class="bg-blue-50 text-blue-600 hover:bg-blue-100 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm">
+                    <i data-lucide="copy" class="w-5 h-5"></i> Copiar
+                </button>
+                <button onclick="clearAllItems()" class="bg-red-50 text-red-500 hover:bg-red-100 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm">
                     <i data-lucide="trash-2" class="w-5 h-5"></i> Vaciar
                 </button>
-                <button onclick="sendListByEmail()" id="btn-send" class="flex-[2] bg-slate-900 text-white hover:bg-black py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95">
-                    <i data-lucide="send" class="w-5 h-5"></i> Enviar a Widdex
+                <button onclick="sendListByEmail()" id="btn-send" class="col-span-2 bg-slate-900 text-white hover:bg-black py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95">
+                    <i data-lucide="send" class="w-5 h-5"></i> Enviar lista
                 </button>
             </div>
         </div>
@@ -272,7 +275,28 @@
             }
         };
 
-        // 6. ENVIAR CORREO MEDIANTE FORMSUBMIT
+        // 6. COPIAR LISTA
+        window.copyList = () => {
+            if (shoppingItems.length === 0) return;
+            
+            const listadoFormateado = shoppingItems.map((it, i) => `${i + 1}. ${it.name}`).join('\n');
+            const textoCompleto = `🛒 Lista de Supermercados:\n\n${listadoFormateado}`;
+            
+            // Método compatible con todos los navegadores
+            const textArea = document.createElement("textarea");
+            textArea.value = textoCompleto;
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showToast("¡Lista copiada al portapapeles!", true);
+            } catch (err) {
+                showToast("Error al copiar la lista", false);
+            }
+            document.body.removeChild(textArea);
+        };
+
+        // 7. ENVIAR CORREO MEDIANTE FORMSUBMIT
         window.sendListByEmail = async () => {
             if (shoppingItems.length === 0) return;
 
@@ -288,7 +312,7 @@
                     method: "POST",
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                     body: JSON.stringify({
-                        _subject: "🛒 Lista del Supermercado",
+                        _subject: "🛒 Lista de Supermercados",
                         Lista_de_Compras: listadoFormateado,
                         _template: "table"
                     })
@@ -308,7 +332,7 @@
             }
         };
 
-        // 7. UTILIDADES (UI y Alertas)
+        // 8. UTILIDADES (UI y Alertas)
         function mostrarErrorCritico(mensaje) {
             document.getElementById('sync-dot').className = "w-2 h-2 rounded-full bg-red-500";
             document.getElementById('sync-text').className = "text-red-500 font-bold";
