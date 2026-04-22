@@ -112,8 +112,11 @@
         import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        // --- CONFIGURACIÓN DE FIREBASE ---
-        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+        // =====================================================================
+        // CONFIGURACIÓN DINÁMICA (Funciona en Canvas y en tu GitHub)
+        // =====================================================================
+        const isCanvas = typeof __firebase_config !== 'undefined';
+        const firebaseConfig = isCanvas 
             ? JSON.parse(__firebase_config) 
             : {
                 apiKey: "TU_API_KEY",
@@ -123,11 +126,13 @@
                 messagingSenderId: "TU_ID",
                 appId: "TU_APP_ID"
             };
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'lista-supermercado-familia-1';
+        // =====================================================================
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'grocery-list-html';
 
         let shoppingItems = [];
         let unsubscribeList = null;
@@ -135,16 +140,17 @@
         // Inicializar Iconos
         lucide.createIcons();
 
-        // 1. Definir Referencia a la colección (Siguiendo Regla 1)
+        // 1. Definir Referencia a la colección
         const listRef = collection(db, 'artifacts', appId, 'public', 'data', 'shopping_list');
 
-        // 2. Lógica de Autenticación (Regla 3: Auth ANTES de Firestore)
+        // 2. Lógica de Autenticación
         const initAuth = async () => {
             try {
-                // Comprobación para evitar el error genérico si faltan las credenciales
-                if (firebaseConfig.apiKey === "TU_API_KEY") {
+                // Validación para avisarte si olvidaste poner tus llaves (solo fuera de Canvas)
+                if (!isCanvas && firebaseConfig.apiKey === "TU_API_KEY") {
                     throw new Error("unconfigured");
                 }
+                
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
@@ -152,9 +158,9 @@
                 }
             } catch (error) {
                 console.error("Auth error:", error);
-                let msg = "Error al iniciar sesión.";
+                let msg = "Error al iniciar sesión en Firebase.";
                 if (error.message === "unconfigured" || (error.code && error.code.includes("api-key"))) {
-                    msg = "¡Falta configurar Firebase! Debes editar el archivo y poner tu API_KEY y datos del proyecto.";
+                    msg = "¡Falta configurar Firebase! Debes editar el archivo index.html y poner tus credenciales (apiKey, projectId, etc).";
                 }
                 document.getElementById('items-list').innerHTML = `<div class="p-8 text-center text-red-500 bg-red-50 rounded-2xl border border-red-100 text-sm font-medium">${msg}</div>`;
             }
@@ -163,10 +169,8 @@
         // 3. Listener de Estado de Auth
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                console.log("Usuario autenticado:", user.uid);
+                console.log("Conectado con éxito:", user.uid);
                 startListListener();
-            } else {
-                console.log("Esperando autenticación...");
             }
         });
 
@@ -181,7 +185,7 @@
             }, (err) => {
                 console.error("Error Firestore:", err);
                 if (err.code === 'permission-denied') {
-                    document.getElementById('items-list').innerHTML = '<div class="p-12 text-center text-red-500 font-medium">Permisos insuficientes. Verificando conexión...</div>';
+                    document.getElementById('items-list').innerHTML = '<div class="p-12 text-center text-red-500 font-medium">Faltan permisos en Firestore. Asegúrate de configurar las "Reglas de Firestore" en modo prueba o permitir escritura/lectura.</div>';
                 }
             });
         }
@@ -246,12 +250,11 @@
             setTimeout(() => toast.classList.add('opacity-0', 'translate-y-4'), 3000);
         };
 
-        // Copiar Lista (Alternativa a Correo)
+        // Copiar Lista
         window.copyList = () => {
             const listStr = shoppingItems.map((it, i) => `${i + 1}. ${it.name}`).join('\n');
             const fullText = `Lista de compras:\n\n${listStr}`;
             
-            // Usamos un método compatible con iframes para copiar al portapapeles
             const textArea = document.createElement("textarea");
             textArea.value = fullText;
             document.body.appendChild(textArea);
@@ -290,7 +293,6 @@
 
             window.showToast("Abriendo aplicación de correo...");
 
-            // Usamos target="_top" para forzar la apertura fuera del iframe
             const tempLink = document.createElement('a');
             tempLink.href = mailtoUrl;
             tempLink.target = '_top';
@@ -315,7 +317,6 @@
         };
 
         window.saveEmail = (val) => localStorage.setItem('savedEmail', val);
-        // Se define el correo por defecto
         document.getElementById('target-email').value = localStorage.getItem('savedEmail') || 'contacto@widdex.com';
 
         // Iniciar flujo de Auth al cargar
