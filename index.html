@@ -22,8 +22,9 @@
             <div class="flex items-center justify-between">
                 <div>
                     <h1 class="text-2xl font-black tracking-tight">Despensa</h1>
-                    <p id="room-badge" class="text-green-400 text-xs font-bold uppercase tracking-widest mt-1 flex items-center gap-1">
-                        <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span> Sincronizada
+                    <p class="text-xs font-bold uppercase tracking-widest mt-1 flex items-center gap-1">
+                        <span id="sync-dot" class="w-2 h-2 rounded-full bg-slate-400"></span> 
+                        <span id="sync-text" class="text-slate-400">Conectando...</span>
                     </p>
                 </div>
                 <button onclick="toggleQR(true)" class="bg-white/10 hover:bg-white/20 p-3 rounded-2xl transition-all active:scale-95">
@@ -47,7 +48,7 @@
             <div id="items-list" class="space-y-3">
                 <div class="flex flex-col items-center justify-center py-16 text-slate-400">
                     <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
-                    <p class="font-medium text-sm">Conectando dispositivos...</p>
+                    <p class="font-medium text-sm">Sincronizando con la nube...</p>
                 </div>
             </div>
         </div>
@@ -74,8 +75,13 @@
             <div class="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                 <i data-lucide="users" class="w-8 h-8 text-blue-600"></i>
             </div>
-            <h2 class="text-2xl font-black mb-2 text-slate-800">Código Familiar</h2>
-            <p class="text-slate-500 text-sm mb-6">Pega este QR en el refri. Quien lo escanee entrará a esta misma lista desde su celular.</p>
+            <h2 class="text-2xl font-black mb-2 text-slate-800">Invitar a la Lista</h2>
+            <p class="text-slate-500 text-sm mb-4">Escanea el código o copia el ID para unirte desde otro celular.</p>
+            
+            <div class="bg-slate-100 p-3 rounded-xl mb-4 font-mono text-sm text-slate-700 select-all border border-slate-200">
+                ID: <span id="room-id-display" class="font-bold text-blue-600"></span>
+            </div>
+
             <div class="bg-white p-4 rounded-3xl border-2 border-slate-100 shadow-inner mb-2">
                 <img id="qr-image" src="" alt="Código QR" class="w-full aspect-square">
             </div>
@@ -91,25 +97,26 @@
     <script>
         lucide.createIcons();
 
-        // 1. CONFIGURACIÓN DE LA "SALA" (ROOM) Y SINCRONIZACIÓN
+        // ==========================================
+        // 1. CONFIGURACIÓN DE LA "SALA" (ROOM)
+        // ==========================================
         let shoppingItems = [];
+        let isSyncing = false;
         let listId = new URLSearchParams(window.location.search).get('id');
 
-        // Si es la primera vez que se abre, crear una sala secreta en la URL
         if (!listId) {
             listId = localStorage.getItem('current_room_id');
             if (!listId) {
                 listId = 'refri-widdex-' + Math.random().toString(36).substr(2, 9);
                 localStorage.setItem('current_room_id', listId);
             }
-
             try {
-                if (!window.location.href.startsWith('blob:')) {
+                if (!window.location.href.startsWith('blob:') && !window.location.href.includes('usercontent')) {
                     const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?id=' + listId;
                     window.history.replaceState({path: newUrl}, '', newUrl);
                 }
             } catch (error) {
-                console.warn("Vista previa detectada: No se puede modificar la barra de direcciones de forma segura.", error);
+                console.warn("Entorno restringido detectado.");
             }
         } else {
             localStorage.setItem('current_room_id', listId);
@@ -118,80 +125,108 @@
         const DWEET_URL = `https://dweet.io/dweet/for/${listId}`;
         const GET_URL = `https://dweet.io/get/latest/dweet/for/${listId}`;
 
-        // 2. SINCRONIZAR CON LA NUBE ANÓNIMA Y ALMACENAMIENTO LOCAL
+        // ==========================================
+        // 2. LÓGICA DE SINCRONIZACIÓN ROBUSTA
+        // ==========================================
+        
+        function updateStatus(isOnline) {
+            const dot = document.getElementById('sync-dot');
+            const text = document.getElementById('sync-text');
+            if (isOnline) {
+                dot.className = "w-2 h-2 rounded-full bg-green-400 animate-pulse";
+                text.className = "text-green-400";
+                text.innerText = "Sincronizada";
+            } else {
+                dot.className = "w-2 h-2 rounded-full bg-red-400";
+                text.className = "text-red-400";
+                text.innerText = "Modo Local (Sin Nube)";
+            }
+        }
+
         async function syncWithCloud() {
+            if (isSyncing) return;
+            isSyncing = true;
+
             try {
-                // ROMPEDOR DE CACHÉ: Añadimos Date.now() a la URL para forzar al navegador a traer datos frescos
+                // Rompedor de Caché vital para móviles
                 const cacheBuster = "?_=" + Date.now();
                 const response = await fetch(GET_URL + cacheBuster, { cache: "no-store" });
+                
+                if (!response.ok) throw new Error("Fallo de red");
                 const data = await response.json();
                 
-                // Leemos los datos de la nube
                 if (data.this === "succeeded" && data.with && data.with.length > 0) {
                     const cloudContent = data.with[0].content;
                     const cloudTimestamp = parseInt(cloudContent.ts || 0);
                     const localTimestamp = parseInt(localStorage.getItem(`ts_${listId}`) || 0);
 
-                    // Solo actualizamos la pantalla si la NUBE es MÁS NUEVA que nuestro celular
+                    // Si la nube tiene datos más nuevos, los descargamos
                     if (cloudTimestamp > localTimestamp) {
                         let parsedItems = [];
                         try {
                             parsedItems = typeof cloudContent.payload === 'string' 
                                 ? JSON.parse(cloudContent.payload) 
                                 : (cloudContent.payload || []);
-                        } catch(e) { parsedItems = []; }
+                        } catch(e) {}
                         
                         shoppingItems = parsedItems;
                         localStorage.setItem(`list_${listId}`, JSON.stringify(shoppingItems));
                         localStorage.setItem(`ts_${listId}`, cloudTimestamp);
                         renderItems();
                     } 
-                    // Si nuestro celular está más actualizado que la nube, subimos nuestros datos (Resolución de conflicto)
+                    // Si nosotros tenemos datos más nuevos, los subimos a la nube
                     else if (localTimestamp > cloudTimestamp) {
                         pushToCloud();
                     }
-                } else if (localStorage.getItem(`list_${listId}`)) {
-                    // Nube vacía pero tenemos datos locales (ej. Sala recién creada por nosotros)
-                    shoppingItems = JSON.parse(localStorage.getItem(`list_${listId}`));
-                    pushToCloud();
-                    renderItems();
                 } else {
-                    renderItems(); // Nube vacía y local vacío
+                    // Si la nube está vacía, subimos lo nuestro
+                    shoppingItems = JSON.parse(localStorage.getItem(`list_${listId}`)) || [];
+                    if (shoppingItems.length > 0) pushToCloud();
+                    renderItems();
                 }
+                updateStatus(true);
             } catch (error) {
-                console.warn("Sincronización pausada. Mostrando caché local.");
+                console.warn("Usando datos locales por falla de internet.");
                 if(shoppingItems.length === 0) {
                     shoppingItems = JSON.parse(localStorage.getItem(`list_${listId}`)) || [];
                     renderItems();
                 }
+                updateStatus(false);
+            } finally {
+                isSyncing = false;
             }
         }
 
-        // Subir los datos actuales para que los demás celulares los vean
         async function pushToCloud() {
             const timestamp = Date.now();
-            localStorage.setItem(`list_${listId}`, JSON.stringify(shoppingItems));
+            const payloadStr = JSON.stringify(shoppingItems);
+            
+            localStorage.setItem(`list_${listId}`, payloadStr);
             localStorage.setItem(`ts_${listId}`, timestamp);
             
             try {
-                // Usamos POST con FormData para soportar listas largas y evitar bloqueos de seguridad
-                const formData = new FormData();
-                formData.append('payload', JSON.stringify(shoppingItems));
-                formData.append('ts', timestamp.toString());
-
+                // Intento 1: POST seguro (Más rápido y confiable)
                 await fetch(DWEET_URL, {
                     method: 'POST',
-                    body: formData
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ payload: payloadStr, ts: timestamp })
                 });
             } catch (error) {
-                console.warn("Error subiendo datos. Se sincronizará en el próximo intento.");
+                // Intento 2: GET Fallback (Burlar restricciones de navegadores estrictos)
+                try {
+                    await fetch(`${DWEET_URL}?payload=${encodeURIComponent(payloadStr)}&ts=${timestamp}`);
+                } catch(e) {
+                    console.warn("Fallo subida a nube.");
+                }
             }
         }
 
-        // Revisar actualizaciones de otros celulares cada 3 segundos
+        // Bucle automático cada 3 segundos
         setInterval(syncWithCloud, 3000);
 
-        // 3. DIBUJAR LA LISTA EN PANTALLA
+        // ==========================================
+        // 3. RENDERIZADO E INTERFAZ
+        // ==========================================
         function renderItems() {
             const listEl = document.getElementById('items-list');
             const actionBar = document.getElementById('action-bar');
@@ -203,7 +238,7 @@
                             <i data-lucide="check" class="w-12 h-12 text-slate-300"></i>
                         </div>
                         <p class="font-bold text-lg text-slate-600">No hay pendientes</p>
-                        <p class="text-sm text-center px-4">Agrega productos o escanea el QR desde otro celular para participar.</p>
+                        <p class="text-sm text-center px-4 mt-2">Agrega productos o escanea el QR desde otro celular para participar.</p>
                     </div>`;
                 actionBar.classList.add('hidden');
             } else {
@@ -223,7 +258,6 @@
             lucide.createIcons();
         }
 
-        // 4. AÑADIR PRODUCTO
         document.getElementById('add-form').onsubmit = (e) => {
             e.preventDefault();
             const input = document.getElementById('item-input');
@@ -231,13 +265,12 @@
             const name = input.value.trim();
             if (!name) return;
 
-            // Bloquear botón brevemente para evitar dobles clics
             btn.innerHTML = `<div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>`;
             btn.disabled = true;
 
             shoppingItems.unshift({ id: Date.now().toString(), name: name });
-            renderItems(); // Refrescar vista
-            pushToCloud(); // Mandar al resto de celulares de forma silenciosa
+            renderItems();
+            pushToCloud();
             
             input.value = '';
             btn.innerHTML = `<i data-lucide="plus" class="w-6 h-6"></i>`;
@@ -245,7 +278,6 @@
             input.focus();
         };
 
-        // 5. ELIMINAR Y VACIAR
         window.eliminarItem = (id) => {
             shoppingItems = shoppingItems.filter(item => item.id !== id);
             renderItems();
@@ -260,7 +292,9 @@
             showToast("Lista vaciada", true);
         };
 
-        // 6. ENVIAR CORREO (FormSubmit)
+        // ==========================================
+        // 4. ENVÍO DE CORREO (FormSubmit)
+        // ==========================================
         window.sendListByEmail = async () => {
             if (shoppingItems.length === 0) return;
 
@@ -296,7 +330,9 @@
             }
         };
 
-        // 7. UTILIDADES (Toast y QR)
+        // ==========================================
+        // 5. UTILIDADES
+        // ==========================================
         window.showToast = (msg, success = true) => {
             const toast = document.getElementById('toast');
             document.getElementById('toast-msg').innerText = msg;
@@ -315,25 +351,24 @@
         window.toggleQR = (show) => {
             const modal = document.getElementById('qr-modal');
             if (show) {
-                // Generamos el QR incluyendo el ID secreto de la sala
                 let url = window.location.href.split('?')[0]; 
                 
-                // Si la app está en un entorno seguro (blob:), le agregamos un dominio falso 
-                // para que el QR pueda leerse o no se rompa la imagen,
-                // aunque para producción será la URL real de GitHub u otro hosting.
-                if (url.startsWith('blob:')) {
-                    url = "https://tu-sitio-en-github.com/index.html"; 
+                // Advertencia si están probando en el entorno aislado temporal
+                if (url.startsWith('blob:') || url.includes('usercontent')) {
+                    alert("⚠️ NOTA:\nComo estás en el modo de vista previa, tu celular físico no podrá abrir el enlace del QR.\n\nGuarda este código HTML y súbelo a internet (ej. GitHub Pages) para usar el QR, o copia y pega el ID de la sala en otra pestaña de tu navegador para probar la sincronización ahora mismo.");
+                    url = "https://tu-sitio-publicado.com/index.html"; 
                 }
 
                 const shareUrl = `${url}?id=${listId}`;
-                document.getElementById('qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(shareUrl)}&color=0f172a&bgcolor=ffffff`;
+                document.getElementById('room-id-display').innerText = listId;
+                document.getElementById('qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(shareUrl)}&color=0f172a&bgcolor=f8fafc`;
                 modal.classList.remove('hidden');
             } else {
                 modal.classList.add('hidden');
             }
         };
 
-        // Iniciar la app obteniendo los datos
+        // Arranque
         syncWithCloud();
     </script>
 </body>
