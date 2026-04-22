@@ -1,308 +1,270 @@
-import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  collection, 
-  addDoc, 
-  onSnapshot, 
-  deleteDoc, 
-  doc, 
-  getDocs,
-  writeBatch
-} from 'firebase/firestore';
-import { 
-  getAuth, 
-  signInAnonymously, 
-  signInWithCustomToken,
-  onAuthStateChanged 
-} from 'firebase/auth';
-import { 
-  ShoppingCart, 
-  Plus, 
-  Trash2, 
-  Mail, 
-  QrCode, 
-  X, 
-  CheckCircle2,
-  Settings
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Súper Lista del Refri</title>
+    <!-- Tailwind CSS para diseño moderno -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons para iconos -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        [v-cloak] { display: none; }
+        .modal-bg { background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans min-h-screen">
 
-// --- CONFIGURACIÓN DINÁMICA ---
-// Si estás en el entorno de Canvas, usa las variables globales. 
-// Si lo llevas a GitHub, reemplaza el objeto dentro de 'else' con tus datos de Firebase.
-const firebaseConfig = typeof __firebase_config !== 'undefined' 
-  ? JSON.parse(__firebase_config) 
-  : {
-      apiKey: "TU_API_KEY_REAL_AQUÍ",
-      authDomain: "TU_PROYECTO.firebaseapp.com",
-      projectId: "TU_PROYECTO",
-      storageBucket: "TU_PROYECTO.appspot.com",
-      messagingSenderId: "TU_ID",
-      appId: "TU_APP_ID"
-    };
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'grocery-list-prod';
-
-export default function App() {
-  const [items, setItems] = useState([]);
-  const [newItem, setNewItem] = useState('');
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [showQR, setShowQR] = useState(false);
-  const [targetEmail, setTargetEmail] = useState(localStorage.getItem('savedEmail') || '');
-  const [showSettings, setShowSettings] = useState(false);
-
-  // Persistencia del correo localmente
-  useEffect(() => {
-    if (targetEmail) {
-      localStorage.setItem('savedEmail', targetEmail);
-    }
-  }, [targetEmail]);
-
-  // Manejo de Autenticación (Regla Obligatoria 3)
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (error) {
-        console.error("Error de autenticación:", error);
-      }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // Escucha en tiempo real (Reglas 1 y 2)
-  useEffect(() => {
-    if (!user) return;
-
-    // Usamos la ruta obligatoria para persistencia en este entorno
-    const listCollection = collection(db, 'artifacts', appId, 'public', 'data', 'shopping_list');
-    
-    const unsubscribe = onSnapshot(listCollection, 
-      (snapshot) => {
-        const itemsList = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        // Ordenar en memoria (Regla 2: no usar orderBy en queries complejas)
-        itemsList.sort((a, b) => b.createdAt - a.createdAt);
-        setItems(itemsList);
-      },
-      (error) => console.error("Firestore error:", error)
-    );
-
-    return () => unsubscribe();
-  }, [user]);
-
-  const addItem = async (e) => {
-    e.preventDefault();
-    if (!newItem.trim() || !user) return;
-
-    try {
-      const listCollection = collection(db, 'artifacts', appId, 'public', 'data', 'shopping_list');
-      await addDoc(listCollection, {
-        name: newItem.trim(),
-        createdAt: Date.now()
-      });
-      setNewItem('');
-    } catch (error) {
-      console.error("Error al añadir item:", error);
-    }
-  };
-
-  const removeItem = async (id) => {
-    if (!user) return;
-    try {
-      const itemDoc = doc(db, 'artifacts', appId, 'public', 'data', 'shopping_list', id);
-      await deleteDoc(itemDoc);
-    } catch (error) {
-      console.error("Error al borrar item:", error);
-    }
-  };
-
-  const sendListByEmail = () => {
-    if (!targetEmail) {
-      setShowSettings(true);
-      return;
-    }
-    const listString = items.map((item, index) => `${index + 1}. ${item.name}`).join('%0D%0A');
-    const subject = "Lista del Supermercado";
-    const body = `Hola!%0D%0A%0D%0AEsta es la lista de compras actual:%0D%0A%0D%0A${listString}%0D%0A%0D%0AEnviado desde mi App del Refrigerador.`;
-    
-    window.location.href = `mailto:${targetEmail}?subject=${subject}&body=${body}`;
-  };
-
-  const clearAllItems = async () => {
-    if (!user || !window.confirm("¿Seguro que quieres vaciar toda la lista?")) return;
-    
-    try {
-      const listCollection = collection(db, 'artifacts', appId, 'public', 'data', 'shopping_list');
-      const snapshot = await getDocs(listCollection);
-      const batch = writeBatch(db);
-      snapshot.docs.forEach((doc) => batch.delete(doc.ref));
-      await batch.commit();
-    } catch (error) {
-      console.error("Error al limpiar lista:", error);
-    }
-  };
-
-  const currentUrl = window.location.href;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(currentUrl)}`;
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans p-4 md:p-8">
-      <div className="max-w-md mx-auto">
-        {/* Header */}
-        <header className="flex items-center justify-between mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="bg-green-600 p-2 rounded-lg shadow-inner">
-              <ShoppingCart className="text-white w-6 h-6" />
+    <div class="max-w-md mx-auto p-4 md:p-8">
+        <!-- Encabezado -->
+        <header class="flex items-center justify-between mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <div class="flex items-center gap-3">
+                <div class="bg-green-600 p-2 rounded-lg shadow-inner text-white">
+                    <i data-lucide="shopping-cart"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-xl leading-tight">Súper Lista</h1>
+                    <p class="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Familiar • Tiempo Real</p>
+                </div>
             </div>
-            <div>
-              <h1 className="font-bold text-xl leading-tight">Súper Lista</h1>
-              <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Familiar • Tiempo Real</p>
+            <div class="flex gap-2">
+                <button onclick="toggleSettings()" class="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors">
+                    <i data-lucide="settings"></i>
+                </button>
+                <button onclick="toggleQR(true)" class="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors">
+                    <i data-lucide="qr-code"></i>
+                </button>
             </div>
-          </div>
-          <div className="flex gap-2">
-            <button 
-              onClick={() => setShowSettings(!showSettings)}
-              className={`p-2 rounded-full transition-colors ${showSettings ? 'bg-green-50 text-green-600' : 'hover:bg-slate-100 text-slate-400'}`}
-            >
-              <Settings className="w-5 h-5" />
-            </button>
-            <button 
-              onClick={() => setShowQR(true)}
-              className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"
-            >
-              <QrCode className="w-5 h-5" />
-            </button>
-          </div>
         </header>
 
-        {/* Configuración de Email */}
-        {showSettings && (
-          <div className="mb-6 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 animate-in slide-in-from-top duration-200">
-            <h2 className="font-bold text-sm mb-3">Configuración de Envío</h2>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-slate-500 block mb-1 font-medium">Enviar lista a:</label>
-                <input
-                  type="email"
-                  value={targetEmail}
-                  onChange={(e) => setTargetEmail(e.target.value)}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none transition-all"
-                  placeholder="ejemplo@correo.com"
-                />
-              </div>
+        <!-- Configuración de Email -->
+        <div id="settings-panel" class="hidden mb-6 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+            <h2 class="font-bold text-sm mb-3">Configuración de Envío</h2>
+            <div class="space-y-3">
+                <label class="text-xs text-slate-500 block mb-1 font-medium">Enviar lista a:</label>
+                <input type="email" id="target-email" 
+                    class="w-full px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500 outline-none transition-all" 
+                    placeholder="ejemplo@correo.com" onchange="saveEmail(this.value)">
             </div>
-          </div>
-        )}
+        </div>
 
-        {/* Formulario para añadir */}
-        <form onSubmit={addItem} className="mb-6 flex gap-2">
-          <input
-            type="text"
-            value={newItem}
-            onChange={(e) => setNewItem(e.target.value)}
-            placeholder="Añadir algo al refri..."
-            className="flex-1 px-5 py-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-green-500 outline-none transition-all shadow-sm"
-          />
-          <button 
-            type="submit"
-            className="bg-green-600 hover:bg-green-700 text-white p-4 rounded-2xl shadow-lg shadow-green-100 transition-all active:scale-95"
-          >
-            <Plus className="w-6 h-6" />
-          </button>
+        <!-- Formulario para añadir -->
+        <form id="add-form" class="mb-6 flex gap-2">
+            <input type="text" id="item-input" required
+                placeholder="Añadir algo al refri..." 
+                class="flex-1 px-5 py-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-green-500 outline-none transition-all shadow-sm">
+            <button type="submit" class="bg-green-600 hover:bg-green-700 text-white p-4 rounded-2xl shadow-lg shadow-green-100 transition-all active:scale-95">
+                <i data-lucide="plus"></i>
+            </button>
         </form>
 
-        {/* Lista de Items */}
-        <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden mb-8">
-          {items.length === 0 ? (
-            <div className="p-12 text-center">
-              <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle2 className="text-slate-200 w-10 h-10" />
-              </div>
-              <p className="text-slate-400 text-sm font-medium">¡No falta nada!</p>
-              <p className="text-slate-300 text-xs mt-1">Agrega productos para empezar.</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-50">
-              {items.map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-5 group hover:bg-slate-50 transition-colors">
-                  <span className="text-slate-700 font-medium">{item.name}</span>
-                  <button 
-                    onClick={() => removeItem(item.id)}
-                    className="text-slate-200 hover:text-red-500 p-2 transition-colors"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
+        <!-- Lista de Items -->
+        <div class="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden mb-8">
+            <div id="items-list" class="divide-y divide-slate-50">
+                <!-- Los items se cargarán aquí -->
+                <div class="p-12 text-center text-slate-400">
+                    <div class="animate-spin inline-block w-6 h-6 border-2 border-green-600 border-t-transparent rounded-full mb-2"></div>
+                    <p>Conectando...</p>
                 </div>
-              ))}
             </div>
-          )}
         </div>
 
-        {/* Botones de acción */}
-        {items.length > 0 && (
-          <div className="grid grid-cols-2 gap-4">
-            <button
-              onClick={sendListByEmail}
-              className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-black text-white py-4 rounded-2xl font-bold text-sm shadow-xl active:scale-95 transition-all"
-            >
-              <Mail className="w-4 h-4" />
-              Enviar Lista
+        <!-- Botones de acción -->
+        <div id="actions-container" class="hidden grid grid-cols-2 gap-4">
+            <button onclick="sendListByEmail()" class="flex items-center justify-center gap-2 bg-slate-900 hover:bg-black text-white py-4 rounded-2xl font-bold text-sm shadow-xl active:scale-95 transition-all">
+                <i data-lucide="mail" class="w-4 h-4"></i> Enviar Lista
             </button>
-            <button
-              onClick={clearAllItems}
-              className="flex items-center justify-center gap-2 bg-white text-red-600 border border-red-100 hover:bg-red-50 py-4 rounded-2xl font-bold text-sm active:scale-95 transition-all"
-            >
-              Vaciar Todo
+            <button onclick="clearAllItems()" class="flex items-center justify-center gap-2 bg-white text-red-600 border border-red-100 hover:bg-red-50 py-4 rounded-2xl font-bold text-sm active:scale-95 transition-all">
+                Vaciar Todo
             </button>
-          </div>
-        )}
-      </div>
-
-      {/* Modal QR */}
-      {showQR && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-6 z-50">
-          <div className="bg-white p-8 rounded-[2.5rem] max-w-sm w-full text-center relative shadow-2xl animate-in fade-in zoom-in duration-300">
-            <button 
-              onClick={() => setShowQR(false)}
-              className="absolute top-6 right-6 text-slate-300 hover:text-slate-600 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
-            <h2 className="text-2xl font-black mb-2">Pégalo en el Refri</h2>
-            <p className="text-slate-500 text-sm mb-8 leading-relaxed">Cualquiera que escanee este código podrá ver y editar la lista contigo.</p>
-            <div className="bg-slate-50 p-6 rounded-3xl mb-8 border border-slate-100 shadow-inner">
-              <img src={qrUrl} alt="QR Code" className="mx-auto w-full aspect-square mix-blend-multiply" />
-            </div>
-            <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-               <p className="text-[10px] text-slate-400 font-mono break-all">{currentUrl}</p>
-            </div>
-          </div>
         </div>
-      )}
     </div>
-  );
-}
+
+    <!-- Modal QR -->
+    <div id="qr-modal" class="hidden fixed inset-0 modal-bg flex items-center justify-center p-6 z-50">
+        <div class="bg-white p-8 rounded-[2.5rem] max-w-sm w-full text-center relative shadow-2xl">
+            <button onclick="toggleQR(false)" class="absolute top-6 right-6 text-slate-300 hover:text-slate-600 transition-colors">
+                <i data-lucide="x"></i>
+            </button>
+            <h2 class="text-2xl font-black mb-2">Pégalo en el Refri</h2>
+            <p class="text-slate-500 text-sm mb-8 leading-relaxed">Cualquiera que escanee este código podrá ver y editar la lista contigo.</p>
+            <div class="bg-slate-50 p-6 rounded-3xl mb-8 border border-slate-100 shadow-inner">
+                <img id="qr-image" src="" alt="QR Code" class="mx-auto w-full aspect-square mix-blend-multiply">
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-200 overflow-hidden">
+                <p id="current-url" class="text-[10px] text-slate-400 font-mono break-all"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Scripts -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // --- CONFIGURACIÓN DE FIREBASE ---
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : {
+                apiKey: "TU_API_KEY",
+                authDomain: "TU_PROYECTO.firebaseapp.com",
+                projectId: "TU_PROYECTO",
+                storageBucket: "TU_PROYECTO.appspot.com",
+                messagingSenderId: "TU_ID",
+                appId: "TU_APP_ID"
+            };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'grocery-list-html';
+
+        let shoppingItems = [];
+        let unsubscribeList = null;
+
+        // Inicializar Iconos
+        lucide.createIcons();
+
+        // 1. Definir Referencia a la colección (Siguiendo Regla 1)
+        const listRef = collection(db, 'artifacts', appId, 'public', 'data', 'shopping_list');
+
+        // 2. Lógica de Autenticación (Regla 3: Auth ANTES de Firestore)
+        const initAuth = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Auth error:", error);
+                document.getElementById('items-list').innerHTML = '<div class="p-12 text-center text-red-500">Error al iniciar sesión</div>';
+            }
+        };
+
+        // 3. Listener de Estado de Auth
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                console.log("Usuario autenticado:", user.uid);
+                startListListener();
+            } else {
+                console.log("Esperando autenticación...");
+            }
+        });
+
+        // 4. Iniciar Escucha de Datos
+        function startListListener() {
+            if (unsubscribeList) unsubscribeList();
+
+            unsubscribeList = onSnapshot(listRef, (snapshot) => {
+                shoppingItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                shoppingItems.sort((a, b) => b.createdAt - a.createdAt);
+                renderItems();
+            }, (err) => {
+                console.error("Error Firestore:", err);
+                if (err.code === 'permission-denied') {
+                    document.getElementById('items-list').innerHTML = '<div class="p-12 text-center text-red-500 font-medium">Permisos insuficientes. Verificando conexión...</div>';
+                }
+            });
+        }
+
+        // Renderizar Lista
+        function renderItems() {
+            const listEl = document.getElementById('items-list');
+            const actionsEl = document.getElementById('actions-container');
+            
+            if (shoppingItems.length === 0) {
+                listEl.innerHTML = `
+                    <div class="p-12 text-center animate-in fade-in duration-500">
+                        <div class="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
+                            <i data-lucide="check-circle-2" class="w-10 h-10"></i>
+                        </div>
+                        <p class="text-slate-400 text-sm font-medium">¡No falta nada!</p>
+                    </div>`;
+                actionsEl.classList.add('hidden');
+            } else {
+                listEl.innerHTML = shoppingItems.map(item => `
+                    <div class="flex items-center justify-between p-5 group hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
+                        <span class="text-slate-700 font-medium">${item.name}</span>
+                        <button onclick="window.removeItem('${item.id}')" class="text-slate-200 hover:text-red-500 p-2 transition-colors">
+                            <i data-lucide="trash-2" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                `).join('');
+                actionsEl.classList.remove('hidden');
+                actionsEl.classList.add('grid');
+            }
+            lucide.createIcons();
+        }
+
+        // Agregar Item
+        document.getElementById('add-form').onsubmit = async (e) => {
+            e.preventDefault();
+            if (!auth.currentUser) return;
+
+            const input = document.getElementById('item-input');
+            const name = input.value.trim();
+            if (!name) return;
+
+            try {
+                await addDoc(listRef, { name, createdAt: Date.now() });
+                input.value = '';
+            } catch (err) { console.error(err); }
+        };
+
+        // Eliminar Item
+        window.removeItem = async (id) => {
+            if (!auth.currentUser) return;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shopping_list', id));
+            } catch (err) { console.error(err); }
+        };
+
+        // Vaciar Todo
+        window.clearAllItems = async () => {
+            if (!auth.currentUser || !confirm("¿Vaciar toda la lista?")) return;
+            try {
+                const snapshot = await getDocs(listRef);
+                const batch = writeBatch(db);
+                snapshot.docs.forEach(d => batch.delete(d.ref));
+                await batch.commit();
+            } catch (err) { console.error(err); }
+        };
+
+        // Enviar por Email
+        window.sendListByEmail = () => {
+            const email = document.getElementById('target-email').value;
+            if (!email) {
+                toggleSettings();
+                document.getElementById('target-email').focus();
+                return;
+            }
+            const listStr = shoppingItems.map((it, i) => `${i + 1}. ${it.name}`).join('%0D%0A');
+            const body = `Lista de compras:%0D%0A%0D%0A${listStr}`;
+            window.location.href = `mailto:${email}?subject=Lista del Supermercado&body=${body}`;
+        };
+
+        // QR y Configuración UI
+        window.toggleSettings = () => document.getElementById('settings-panel').classList.toggle('hidden');
+        
+        window.toggleQR = (show) => {
+            const modal = document.getElementById('qr-modal');
+            if (show) {
+                const url = window.location.href;
+                document.getElementById('qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`;
+                document.getElementById('current-url').innerText = url;
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        };
+
+        window.saveEmail = (val) => localStorage.setItem('savedEmail', val);
+        document.getElementById('target-email').value = localStorage.getItem('savedEmail') || '';
+
+        // Iniciar flujo de Auth al cargar
+        initAuth();
+    </script>
+</body>
+</html>
