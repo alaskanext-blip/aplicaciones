@@ -23,8 +23,8 @@
                 <div>
                     <h1 class="text-2xl font-black tracking-tight">Despensa</h1>
                     <p class="text-xs font-bold uppercase tracking-widest mt-1 flex items-center gap-1">
-                        <span id="sync-dot" class="w-2 h-2 rounded-full bg-slate-400"></span> 
-                        <span id="sync-text" class="text-slate-400">Conectando...</span>
+                        <span id="sync-dot" class="w-2 h-2 rounded-full bg-slate-500"></span> 
+                        <span id="sync-text" class="text-slate-400">Conectando a la nube...</span>
                     </p>
                 </div>
                 <button onclick="toggleQR(true)" class="bg-white/10 hover:bg-white/20 p-3 rounded-2xl transition-all active:scale-95">
@@ -34,10 +34,10 @@
 
             <!-- Formulario de Ingreso -->
             <form id="add-form" class="mt-6 flex gap-2 relative">
-                <input type="text" id="item-input" required autocomplete="off"
-                    placeholder="¿Qué falta comprar?" 
-                    class="flex-1 px-5 py-4 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/50 shadow-inner transition-all">
-                <button type="submit" id="btn-add" class="bg-blue-600 text-white p-4 rounded-2xl hover:bg-blue-500 active:scale-95 transition-all shadow-lg flex items-center justify-center min-w-[60px]">
+                <input type="text" id="item-input" required autocomplete="off" disabled
+                    placeholder="Esperando conexión..." 
+                    class="flex-1 px-5 py-4 rounded-2xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-4 focus:ring-blue-500/50 shadow-inner transition-all disabled:bg-slate-100 disabled:text-slate-400">
+                <button type="submit" id="btn-add" disabled class="bg-blue-600 text-white p-4 rounded-2xl hover:bg-blue-500 active:scale-95 transition-all shadow-lg flex items-center justify-center min-w-[60px] disabled:bg-slate-300 disabled:cursor-not-allowed">
                     <i data-lucide="plus" class="w-6 h-6"></i>
                 </button>
             </form>
@@ -48,7 +48,7 @@
             <div id="items-list" class="space-y-3">
                 <div class="flex flex-col items-center justify-center py-16 text-slate-400">
                     <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
-                    <p class="font-medium text-sm">Sincronizando con la nube...</p>
+                    <p class="font-medium text-sm">Sincronizando con Firestore...</p>
                 </div>
             </div>
         </div>
@@ -73,15 +73,10 @@
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
             <div class="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <i data-lucide="users" class="w-8 h-8 text-blue-600"></i>
+                <i data-lucide="cloud" class="w-8 h-8 text-blue-600"></i>
             </div>
-            <h2 class="text-2xl font-black mb-2 text-slate-800">Invitar a la Lista</h2>
-            <p class="text-slate-500 text-sm mb-4">Escanea el código o copia el ID para unirte desde otro celular.</p>
-            
-            <div class="bg-slate-100 p-3 rounded-xl mb-4 font-mono text-sm text-slate-700 select-all border border-slate-200">
-                ID: <span id="room-id-display" class="font-bold text-blue-600"></span>
-            </div>
-
+            <h2 class="text-2xl font-black mb-2 text-slate-800">Sincronización</h2>
+            <p class="text-slate-500 text-sm mb-6">Escanea el código para abrir la app. Todos los celulares verán los cambios al instante gracias a la nube.</p>
             <div class="bg-white p-4 rounded-3xl border-2 border-slate-100 shadow-inner mb-2">
                 <img id="qr-image" src="" alt="Código QR" class="w-full aspect-square">
             </div>
@@ -94,149 +89,98 @@
         <span id="toast-msg">Mensaje</span>
     </div>
 
-    <script>
+    <!-- ========================================== -->
+    <!-- SCRIPTS DE FIREBASE (LA NUBE REAL)         -->
+    <!-- ========================================== -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // =====================================================================
+        // ⚠️ ZONA DE CONFIGURACIÓN DE GITHUB (REEMPLAZAR AL EXPORTAR)
+        // =====================================================================
+        const isPreviewMode = typeof __firebase_config !== 'undefined';
+        
+        const firebaseConfig = isPreviewMode ? JSON.parse(__firebase_config) : {
+            apiKey: "AIzaSyD82WMeIpqSU0ruTrFLIXSt-rbTZcHaxf0",
+            authDomain: "appsupermercado-c018b.firebaseapp.com",
+            projectId: "appsupermercado-c018b",
+            storageBucket: "appsupermercado-c018b.firebasestorage.app",
+            messagingSenderId: "1004793635757",
+            appId: "1:1004793635757:web:1448e4ccbd5bd90f02f724",
+            measurementId: "G-5KJ63B6PD5"
+        };
+        // =====================================================================
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'lista-widdex-compartida';
+        
+        // Inicializar Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let shoppingItems = [];
         lucide.createIcons();
 
-        // ==========================================
-        // 1. CONFIGURACIÓN DE LA "SALA" (ROOM)
-        // ==========================================
-        let shoppingItems = [];
-        let isSyncing = false;
-        let listId = new URLSearchParams(window.location.search).get('id');
-
-        if (!listId) {
-            listId = localStorage.getItem('current_room_id');
-            if (!listId) {
-                listId = 'refri-widdex-' + Math.random().toString(36).substr(2, 9);
-                localStorage.setItem('current_room_id', listId);
-            }
+        // 1. SISTEMA DE AUTENTICACIÓN (Regla Obligatoria de Firebase)
+        const iniciarConexion = async () => {
             try {
-                if (!window.location.href.startsWith('blob:') && !window.location.href.includes('usercontent')) {
-                    const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + '?id=' + listId;
-                    window.history.replaceState({path: newUrl}, '', newUrl);
+                if (!isPreviewMode && firebaseConfig.apiKey === "TU_API_KEY") {
+                    mostrarErrorCritico("Para usar esta app en GitHub o tu propio hosting, debes reemplazar 'TU_API_KEY' con las llaves de tu proyecto de Firebase.");
+                    return;
+                }
+
+                // Iniciar sesión silenciosa en la nube
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
                 }
             } catch (error) {
-                console.warn("Entorno restringido detectado.");
+                console.error("Error de autenticación:", error);
+                mostrarErrorCritico("No se pudo conectar a la nube de Firebase. Revisa tu configuración o conexión a internet.");
             }
-        } else {
-            localStorage.setItem('current_room_id', listId);
-        }
+        };
 
-        const DWEET_URL = `https://dweet.io/dweet/for/${listId}`;
-        const GET_URL = `https://dweet.io/get/latest/dweet/for/${listId}`;
+        // 2. ESCUCHAR CAMBIOS EN TIEMPO REAL (Simultaneidad)
+        onAuthStateChanged(auth, (user) => {
+            if (!user) return; // Esperar a que el usuario esté conectado
 
-        // ==========================================
-        // 2. LÓGICA DE SINCRONIZACIÓN ROBUSTA
-        // ==========================================
-        
-        function updateStatus(isOnline) {
             const dot = document.getElementById('sync-dot');
             const text = document.getElementById('sync-text');
-            if (isOnline) {
-                dot.className = "w-2 h-2 rounded-full bg-green-400 animate-pulse";
-                text.className = "text-green-400";
-                text.innerText = "Sincronizada";
-            } else {
-                dot.className = "w-2 h-2 rounded-full bg-red-400";
-                text.className = "text-red-400";
-                text.innerText = "Modo Local (Sin Nube)";
-            }
-        }
+            const input = document.getElementById('item-input');
+            const btnAdd = document.getElementById('btn-add');
 
-        async function syncWithCloud() {
-            if (isSyncing) return;
-            isSyncing = true;
+            // Indicadores visuales de éxito
+            dot.className = "w-2 h-2 rounded-full bg-green-400 animate-pulse";
+            text.className = "text-green-400";
+            text.innerText = "Nube Conectada";
+            input.disabled = false;
+            input.placeholder = "¿Qué falta comprar?";
+            btnAdd.disabled = false;
 
-            try {
-                // Rompedor de Caché vital para móviles
-                const cacheBuster = "?_=" + Date.now();
-                const response = await fetch(GET_URL + cacheBuster, { cache: "no-store" });
+            // Referencia a la base de datos (Colección compartida)
+            const listRef = collection(db, 'artifacts', appId, 'public', 'data', 'shopping_list');
+
+            // Suscribirse a los cambios en vivo
+            onSnapshot(listRef, (snapshot) => {
+                shoppingItems = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
                 
-                // NOTA: Dweet.io devuelve 404 cuando la sala es nueva. NO lanzamos error aquí.
-                if (!response.ok && response.status !== 404) throw new Error("Fallo de red real");
+                // Ordenar por fecha de creación (más recientes primero)
+                shoppingItems.sort((a, b) => b.createdAt - a.createdAt);
                 
-                const data = await response.json();
-                
-                // Si la sala ya existe y tiene contenido
-                if (data.this === "succeeded" && data.with && data.with.length > 0) {
-                    const cloudContent = data.with[0].content;
-                    const cloudTimestamp = parseInt(cloudContent.ts || 0);
-                    const localTimestamp = parseInt(localStorage.getItem(`ts_${listId}`) || 0);
+                renderItems();
+            }, (error) => {
+                console.error("Error leyendo Firestore:", error);
+                mostrarErrorCritico("Se perdieron los permisos de lectura en la base de datos.");
+            });
+        });
 
-                    // Si la nube tiene datos más nuevos, los descargamos
-                    if (cloudTimestamp > localTimestamp) {
-                        let parsedItems = [];
-                        try {
-                            parsedItems = typeof cloudContent.payload === 'string' 
-                                ? JSON.parse(cloudContent.payload) 
-                                : (cloudContent.payload || []);
-                        } catch(e) {}
-                        
-                        shoppingItems = parsedItems;
-                        localStorage.setItem(`list_${listId}`, JSON.stringify(shoppingItems));
-                        localStorage.setItem(`ts_${listId}`, cloudTimestamp);
-                        renderItems();
-                    } 
-                    // Si nosotros tenemos datos más nuevos, los subimos a la nube (Resolución de conflicto)
-                    else if (localTimestamp > cloudTimestamp) {
-                        pushToCloud();
-                    }
-                    updateStatus(true);
-                } 
-                // Si la sala es NUEVA (Error 404)
-                else if (data.with === 404 || data.because === "we couldn't find this") {
-                    shoppingItems = JSON.parse(localStorage.getItem(`list_${listId}`)) || [];
-                    if (shoppingItems.length > 0) {
-                        pushToCloud(); // Empujamos nuestros datos locales para inicializar la nube
-                    }
-                    renderItems();
-                    updateStatus(true);
-                } else {
-                    throw new Error("Formato de respuesta desconocido");
-                }
-            } catch (error) {
-                console.warn("Usando datos locales por falla de internet.");
-                if(shoppingItems.length === 0) {
-                    shoppingItems = JSON.parse(localStorage.getItem(`list_${listId}`)) || [];
-                    renderItems();
-                }
-                updateStatus(false);
-            } finally {
-                isSyncing = false;
-            }
-        }
-
-        async function pushToCloud() {
-            const timestamp = Date.now();
-            const payloadStr = JSON.stringify(shoppingItems);
-            
-            // Guardado local inmediato
-            localStorage.setItem(`list_${listId}`, payloadStr);
-            localStorage.setItem(`ts_${listId}`, timestamp);
-            
-            try {
-                // Envío en formato JSON puro (el más compatible con Dweet)
-                await fetch(DWEET_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ payload: payloadStr, ts: timestamp })
-                });
-            } catch (error) {
-                // Fallback por si el POST estricto falla en ciertos navegadores
-                try {
-                    await fetch(`${DWEET_URL}?payload=${encodeURIComponent(payloadStr)}&ts=${timestamp}`);
-                } catch(e) {
-                    console.warn("Fallo subida a nube en segundo plano.");
-                }
-            }
-        }
-
-        // Bucle automático cada 3 segundos
-        setInterval(syncWithCloud, 3000);
-
-        // ==========================================
-        // 3. RENDERIZADO E INTERFAZ
-        // ==========================================
+        // 3. RENDERIZAR LISTA EN PANTALLA
         function renderItems() {
             const listEl = document.getElementById('items-list');
             const actionBar = document.getElementById('action-bar');
@@ -248,7 +192,7 @@
                             <i data-lucide="check" class="w-12 h-12 text-slate-300"></i>
                         </div>
                         <p class="font-bold text-lg text-slate-600">No hay pendientes</p>
-                        <p class="text-sm text-center px-4 mt-2">Agrega productos o escanea el QR desde otro celular para participar.</p>
+                        <p class="text-sm text-center px-4 mt-2">Agrega productos y se sincronizarán al instante con todos los dispositivos.</p>
                     </div>`;
                 actionBar.classList.add('hidden');
             } else {
@@ -258,7 +202,7 @@
                             <div class="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></div>
                             <span class="font-medium text-slate-700 truncate">${item.name}</span>
                         </div>
-                        <button onclick="eliminarItem('${item.id}')" class="text-slate-300 hover:text-red-500 bg-slate-50 hover:bg-red-50 p-2 rounded-xl transition-all">
+                        <button onclick="window.eliminarItem('${item.id}')" class="text-slate-300 hover:text-red-500 bg-slate-50 hover:bg-red-50 p-2 rounded-xl transition-all">
                             <i data-lucide="x" class="w-4 h-4"></i>
                         </button>
                     </div>
@@ -268,43 +212,67 @@
             lucide.createIcons();
         }
 
-        document.getElementById('add-form').onsubmit = (e) => {
+        // 4. AÑADIR PRODUCTO (Sube a la Nube)
+        document.getElementById('add-form').onsubmit = async (e) => {
             e.preventDefault();
+            if (!auth.currentUser) return;
+
             const input = document.getElementById('item-input');
             const btn = document.getElementById('btn-add');
             const name = input.value.trim();
             if (!name) return;
 
+            // Bloquear input mientras sube para evitar dobles envíos
+            input.disabled = true;
             btn.innerHTML = `<div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>`;
-            btn.disabled = true;
 
-            shoppingItems.unshift({ id: Date.now().toString(), name: name });
-            renderItems();
-            pushToCloud();
+            try {
+                const listRef = collection(db, 'artifacts', appId, 'public', 'data', 'shopping_list');
+                await addDoc(listRef, {
+                    name: name,
+                    createdAt: Date.now()
+                });
+                input.value = '';
+            } catch (err) {
+                showToast("Error al guardar en la nube", false);
+            } finally {
+                input.disabled = false;
+                btn.innerHTML = `<i data-lucide="plus" class="w-6 h-6"></i>`;
+                lucide.createIcons();
+                input.focus();
+            }
+        };
+
+        // 5. ELIMINAR Y VACIAR (Sube a la Nube)
+        window.eliminarItem = async (id) => {
+            if (!auth.currentUser) return;
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'shopping_list', id));
+            } catch (err) {
+                showToast("Error al eliminar", false);
+            }
+        };
+
+        window.clearAllItems = async () => {
+            if (!auth.currentUser || !confirm("¿Seguro que quieres vaciar la lista en todos los celulares?")) return;
             
-            input.value = '';
-            btn.innerHTML = `<i data-lucide="plus" class="w-6 h-6"></i>`;
-            btn.disabled = false;
-            input.focus();
+            try {
+                const listRef = collection(db, 'artifacts', appId, 'public', 'data', 'shopping_list');
+                const snapshot = await getDocs(listRef);
+                const batch = writeBatch(db);
+                
+                snapshot.docs.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+                
+                await batch.commit();
+                showToast("Lista vaciada correctamente", true);
+            } catch (err) {
+                showToast("Error al vaciar la lista", false);
+            }
         };
 
-        window.eliminarItem = (id) => {
-            shoppingItems = shoppingItems.filter(item => item.id !== id);
-            renderItems();
-            pushToCloud();
-        };
-
-        window.clearAllItems = () => {
-            if (!confirm("¿Seguro que quieres vaciar toda la lista? Esto la borrará en todos los celulares conectados.")) return;
-            shoppingItems = [];
-            renderItems();
-            pushToCloud();
-            showToast("Lista vaciada", true);
-        };
-
-        // ==========================================
-        // 4. ENVÍO DE CORREO (FormSubmit)
-        // ==========================================
+        // 6. ENVIAR CORREO MEDIANTE FORMSUBMIT
         window.sendListByEmail = async () => {
             if (shoppingItems.length === 0) return;
 
@@ -320,7 +288,7 @@
                     method: "POST",
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                     body: JSON.stringify({
-                        _subject: "🛒 Nueva Lista del Supermercado",
+                        _subject: "🛒 Lista del Supermercado",
                         Lista_de_Compras: listadoFormateado,
                         _template: "table"
                     })
@@ -340,9 +308,21 @@
             }
         };
 
-        // ==========================================
-        // 5. UTILIDADES
-        // ==========================================
+        // 7. UTILIDADES (UI y Alertas)
+        function mostrarErrorCritico(mensaje) {
+            document.getElementById('sync-dot').className = "w-2 h-2 rounded-full bg-red-500";
+            document.getElementById('sync-text').className = "text-red-500 font-bold";
+            document.getElementById('sync-text').innerText = "Error de Nube";
+            
+            const listEl = document.getElementById('items-list');
+            listEl.innerHTML = `
+                <div class="bg-red-50 border border-red-200 text-red-600 p-6 rounded-2xl text-center text-sm shadow-inner">
+                    <i data-lucide="alert-triangle" class="w-8 h-8 mx-auto mb-3 text-red-500"></i>
+                    <b>Error de Conexión</b><br><br>${mensaje}
+                </div>`;
+            lucide.createIcons();
+        }
+
         window.showToast = (msg, success = true) => {
             const toast = document.getElementById('toast');
             document.getElementById('toast-msg').innerText = msg;
@@ -362,24 +342,18 @@
             const modal = document.getElementById('qr-modal');
             if (show) {
                 let url = window.location.href.split('?')[0]; 
-                
-                // Advertencia si están probando en el entorno aislado temporal
                 if (url.startsWith('blob:') || url.includes('usercontent')) {
-                    alert("⚠️ NOTA:\nComo estás en el modo de vista previa, tu celular físico no podrá abrir el enlace del QR.\n\nGuarda este código HTML y súbelo a internet (ej. GitHub Pages) para usar el QR, o copia y pega el ID de la sala en otra pestaña de tu navegador para probar la sincronización ahora mismo.");
-                    url = "https://tu-sitio-publicado.com/index.html"; 
+                    url = "https://tu-sitio-en-github.com"; 
                 }
-
-                const shareUrl = `${url}?id=${listId}`;
-                document.getElementById('room-id-display').innerText = listId;
-                document.getElementById('qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(shareUrl)}&color=0f172a&bgcolor=f8fafc`;
+                document.getElementById('qr-image').src = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(url)}&color=0f172a&bgcolor=ffffff`;
                 modal.classList.remove('hidden');
             } else {
                 modal.classList.add('hidden');
             }
         };
 
-        // Arranque
-        syncWithCloud();
+        // Arrancar la App
+        iniciarConexion();
     </script>
 </body>
 </html>
